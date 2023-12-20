@@ -15,11 +15,13 @@ from bokeh.plotting import Figure, figure
 from bokeh.transform import dodge
 from bokeh.layouts import row
 
+import plotly.graph_objects as go
+
 from ..configs import Config
 from ..dtypes import Continuous, DateTime, Nominal, is_dtype
 from ..intermediate import Intermediate
 from ..palette import CATEGORY10, RDBU
-from ..utils import tweak_figure, _format_axis, _format_bin_intervals
+from ..utils import tweak_figure, _format_axis, _format_bin_intervals, log_function_call
 from ..correlation.render import create_color_mapper
 
 __all__ = ["render_diff"]
@@ -144,7 +146,7 @@ def bar_viz(
         _format_axis(fig, 0, df[baseline].max(), "y")
     return fig
 
-
+@log_function_call
 def hist_viz(
     hist: List[Tuple[np.ndarray, np.ndarray]],
     nrows: List[int],
@@ -224,6 +226,87 @@ def hist_viz(
     fig.xaxis.axis_label = x_axis_label
     fig.xaxis.axis_label_standoff = 0
 
+    return fig
+
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import pandas as pd
+
+def hist_viz_plotly(
+    hist: List[Tuple[np.ndarray, np.ndarray]],
+    nrows: List[int],
+    col: str,
+    yscale: str,
+    plot_width: int,
+    plot_height: int,
+    show_yticks: bool,
+    df_labels: List[str],
+    orig: Optional[List[str]] = None,
+) -> go.Figure:
+    """
+    Render a histogram using Plotly
+    """
+    # Create a subplot figure
+    fig = go.Figure()
+
+    # Update layout
+    fig.update_layout(
+        title=col,
+        height=plot_height,
+        width=plot_width,
+        yaxis_type=yscale,  # Set y-axis type ('linear' or 'log')
+    )
+
+    for i, hst in enumerate(hist):
+        counts, bins = hst
+        if sum(counts) == 0:
+            fig.add_trace(go.Scatter(x=[], y=[]))
+            continue
+
+        intvls = _format_bin_intervals(bins)  # Need to define this function or adapt it for Plotly
+        df = pd.DataFrame({
+            "Interval": intvls,
+            "Left": bins[:-1],
+            "Right": bins[1:],
+            "Frequency": counts,
+            "Percent": counts / nrows[i] * 100,
+            "Source": orig[i] if orig else None,
+        })
+
+        for index, row in df.iterrows():
+            hover_text = (f"Bin: {row['Interval']}<br>"
+                          f"Frequency: {row['Frequency']}<br>"
+                          f"Percent: {row['Percent']:.2f}%<br>"
+                          f"Source: {row['Source']}")
+
+            fig.add_trace(go.Bar(
+                x=[(row['Left'] + row['Right']) / 2],
+                y=[row['Frequency']],
+                width=row['Right'] - row['Left'],
+                name=df_labels[i],
+                hoverinfo="text",
+                text=hover_text,
+                marker_color='blue',
+                showlegend=False
+                # Simplified color mapping
+            ))
+
+    x_axis_label = col if show_yticks else ""
+    if orig and orig != df_labels:
+        additional_text = f", this variable is only in {','.join(orig)}"
+        x_axis_label += additional_text if x_axis_label else f"This variable is only in {','.join(orig)}"
+    fig.update_xaxes(title_text=x_axis_label)
+
+    if show_yticks:
+        fig.update_yaxes(title_text="Frequency")
+
+    return fig
+
+
+@log_function_call
+def bar_viz_plotly(data, x, y):
+    fig = go.Figure(data=[go.Bar(x=data[x], y=data[y])])
+    fig.update_layout(title=f'Bar plot of {x} vs {y}')
     return fig
 
 

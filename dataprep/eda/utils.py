@@ -1,6 +1,7 @@
 """Miscellaneous functions
 """
 import logging
+import functools
 from math import ceil
 from typing import Any, Dict, List, Optional, Tuple, Union, cast
 from collections import Counter
@@ -528,3 +529,15 @@ def _format_bin_intervals(bins_arr: np.ndarray) -> List[str]:
     intervals = [f"[{bins_arr[i]}, {bins_arr[i + 1]})" for i in range(len(bins_arr) - 2)]
     intervals.append(f"[{bins_arr[-2]},{bins_arr[-1]}]")
     return intervals
+
+def log_function_call(func):
+    """Decorator to log function calls and their parameters."""
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        args_repr = [repr(a) for a in args]
+        kwargs_repr = [f"{k}={v!r}" for k, v in kwargs.items()]
+        signature = ", ".join(args_repr + kwargs_repr)
+        logging.info(f"Calling {func.__name__}({signature})")
+        return func(*args, **kwargs)
+
+    return wrapper
